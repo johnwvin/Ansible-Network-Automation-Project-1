@@ -10,7 +10,12 @@ pipeline {
     }
 
     stages {
-        // The "Pre-flight Cleanup" stage has been removed.
+        stage('Pre-flight Cleanup') {
+            steps {
+                echo "Forcefully removing any leftover containers from previous runs..."
+                sh "docker rm -f registry-server pypi-server || true"
+            }
+        }
         
         stage('Setup Services and Network') {
             steps {
