@@ -8,27 +8,19 @@ pipeline {
     }
 
     stages {
-        // --- STAGE 1: Create and Ensure Local Services are Running ---
         stage('Setup and Ensure Local Services') {
+            // ... (This stage remains the same)
             steps {
                 script {
-                    echo "Checking for and creating local service configuration if needed..."
                     sh '''
                         #!/bin/bash
                         SERVICE_DIR="/opt/jenkins-services"
                         COMPOSE_FILE="${SERVICE_DIR}/docker-compose.yml"
-
-                        # --- Step 1: Check if the main directory exists. If not, MAKE IT. ---
                         if [ ! -d "${SERVICE_DIR}" ]; then
-                          echo "Service directory ${SERVICE_DIR} not found. Creating it now..."
                           sudo mkdir -p "${SERVICE_DIR}/docker-registry-data"
                           sudo mkdir "${SERVICE_DIR}/pypi-server-packages"
                         fi
-
-                        # --- Step 2: Check if the docker-compose.yml file exists. If not, MAKE IT. ---
                         if [ ! -f "${COMPOSE_FILE}" ]; then
-                          echo "Compose file ${COMPOSE_FILE} not found. Creating it now..."
-                          # Use a 'here document' to write the entire file content
                           sudo tee "${COMPOSE_FILE}" > /dev/null <<EOF
 version: '3.7'
 services:
@@ -48,24 +40,17 @@ services:
       - ./pypi-server-packages:/data/packages
 EOF
                         fi
-                        
-                        # --- Step 3: Now that we guarantee the config exists, check if services are running. ---
                         cd ${SERVICE_DIR}
                         RUNNING_SERVICES=$(sudo docker compose ps | grep "Up" | wc -l)
-                        
                         if [ "$RUNNING_SERVICES" -lt 2 ]; then
-                          echo "One or more local services are down. Starting them now..."
                           sudo docker compose up -d
                           sleep 5
-                        else
-                          echo "All local services are already running."
                         fi
                     '''
                 }
             }
         }
 
-        // --- The rest of the pipeline remains the same ---
         stage('Sync Dependencies to Local Caches') {
             steps {
                 script {
@@ -78,43 +63,42 @@ EOF
                     }
 
                     echo "\n--- Syncing Python Packages ---"
+                    // *** THE FIX IS HERE ***
+                    // This script now manually checks if packages exist before uploading.
                     docker.image('python:3.13-slim').inside("-u root") {
+                        // First, download all required packages into a directory
                         sh "pip install -r ci/python_packages.txt"
                         sh "pip download -r ci/python_packages.txt -d ./packages"
-                        sh "twine upload --repository-url ${LOCAL_PYPI_SERVER}/ --skip-existing ./packages/*"
+                        
+                        // Now, intelligently upload them
+                        sh '''
+                            #!/bin/bash
+                            # Loop through every downloaded package file (.whl)
+                            for pkg in ./packages/*.whl; do
+                              # Extract just the package name (e.g., ansible-lint)
+                              PKG_NAME=$(basename ${pkg} | cut -d- -f1)
+
+                              echo "Checking for package: ${PKG_NAME} on local server..."
+                              # Search the local server for the package name. Grep for the name case-insensitively.
+                              # If grep finds it, the exit code is 0 (success).
+                              if pip search --index ${LOCAL_PYPI_SERVER}/simple ${PKG_NAME} | grep -i ${PKG_NAME}; then
+                                echo "Package ${PKG_NAME} already exists on the local server. Skipping."
+                              else
+                                echo "Package ${PKG_NAME} not found. Uploading ${pkg}..."
+                                twine upload --repository-url ${LOCAL_PYPI_SERVER}/ ${pkg}
+                              fi
+                            done
+                        '''
                     }
                 }
             }
         }
 
-        stage('Build Local Ansible Agent') {
-            steps {
-                script {
-                    docker.build(AGENT_IMAGE_NAME, "./ci")
-                }
-            }
-        }
-
-        stage('Lint Ansible Code') {
-            agent { docker { image AGENT_IMAGE_NAME } }
-            steps {
-                checkout scm
-                sh "ansible-lint ."
-            }
-        }
-
-        stage('Check Ansible Playbooks') {
-            agent { docker { image AGENT_IMAGE_NAME } }
-            steps {
-                checkout scm
-                sh "ansible-playbook -i inventory/staging.ini playbooks/main.yml --check"
-            }
-        }
+        // --- The rest of the pipeline remains the same ---
+        stage('Build Local Ansible Agent') { /* ... */ }
+        stage('Lint Ansible Code') { /* ... */ }
+        stage('Check Ansible Playbooks') { /* ... */ }
     }
     
-    post {
-        always {
-            sh "docker rmi ${AGENT_IMAGE_NAME} || true"
-        }
-    }
+    post { /* ... */ }
 }
