@@ -6,8 +6,6 @@ pipeline {
         IMAGE_NAME       = "custom/ansible"
         IMAGE_TAG        = "3.13"
         IMAGE_FULL       = "${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
-
-        # Nexus PyPI proxy for inside-container installs
         PIP_INDEX_URL    = "https://nexus.johnwvin.com/repository/PyPi/simple"
         PIP_TRUSTED_HOST = "nexus.johnwvin.com"
     }
