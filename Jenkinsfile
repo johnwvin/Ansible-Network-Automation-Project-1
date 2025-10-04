@@ -11,7 +11,7 @@ pipeline {
         stage('Docker Login') {
             steps {
                 echo "Logging into Nexus Docker repository..."
-                withCredentials([usernamePassword(credentialsId: 'nexus-creds', 
+                withCredentials([usernamePassword(credentialsId: 'nexus-creds-1', 
                                                   usernameVariable: 'NEXUS_USER', 
                                                   passwordVariable: 'NEXUS_PASS')]) {
                     sh '''
@@ -20,7 +20,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Pull Ansible Image') {
             steps {
                 sh '''
