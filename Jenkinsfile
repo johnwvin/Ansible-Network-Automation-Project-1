@@ -9,7 +9,6 @@ pipeline {
 
     stages {
         stage('Setup and Ensure Local Services') {
-            // ... (This stage remains the same)
             steps {
                 script {
                     sh '''
@@ -41,9 +40,9 @@ services:
 EOF
                         fi
                         cd ${SERVICE_DIR}
-                        RUNNING_SERVICES=$(sudo docker compose ps | grep "Up" | wc -l)
+                        RUNNING_SERVICES=$(sudo docker-compose ps | grep "Up" | wc -l)
                         if [ "$RUNNING_SERVICES" -lt 2 ]; then
-                          sudo docker compose up -d
+                          sudo docker-compose up -d
                           sleep 5
                         fi
                     '''
@@ -63,26 +62,16 @@ EOF
                     }
 
                     echo "\n--- Syncing Python Packages ---"
-                    // *** THE FIX IS HERE ***
-                    // This script now manually checks if packages exist before uploading.
                     docker.image('python:3.13-slim').inside("-u root") {
-                        // First, download all required packages into a directory
                         sh "pip install -r ci/python_packages.txt"
                         sh "pip download -r ci/python_packages.txt -d ./packages"
-                        
-                        // Now, intelligently upload them
                         sh '''
                             #!/bin/bash
-                            # Loop through every downloaded package file (.whl)
                             for pkg in ./packages/*.whl; do
-                              # Extract just the package name (e.g., ansible-lint)
                               PKG_NAME=$(basename ${pkg} | cut -d- -f1)
-
                               echo "Checking for package: ${PKG_NAME} on local server..."
-                              # Search the local server for the package name. Grep for the name case-insensitively.
-                              # If grep finds it, the exit code is 0 (success).
                               if pip search --index ${LOCAL_PYPI_SERVER}/simple ${PKG_NAME} | grep -i ${PKG_NAME}; then
-                                echo "Package ${PKG_NAME} already exists on the local server. Skipping."
+                                echo "Package ${PKG_NAME} already exists. Skipping."
                               else
                                 echo "Package ${PKG_NAME} not found. Uploading ${pkg}..."
                                 twine upload --repository-url ${LOCAL_PYPI_SERVER}/ ${pkg}
@@ -94,11 +83,36 @@ EOF
             }
         }
 
-        // --- The rest of the pipeline remains the same ---
-        stage('Build Local Ansible Agent') { /* ... */ }
-        stage('Lint Ansible Code') { /* ... */ }
-        stage('Check Ansible Playbooks') { /* ... */ }
+        // --- The following stages are now restored ---
+        stage('Build Local Ansible Agent') {
+            steps {
+                script {
+                    docker.build(AGENT_IMAGE_NAME, "./ci")
+                }
+            }
+        }
+
+        stage('Lint Ansible Code') {
+            agent { docker { image AGENT_IMAGE_NAME } }
+            steps {
+                checkout scm
+                sh "ansible-lint ."
+            }
+        }
+
+        stage('Check Ansible Playbooks') {
+            agent { docker { image AGENT_IMAGE_NAME } }
+            steps {
+                checkout scm
+                sh "ansible-playbook -i inventory/staging.ini playbooks/main.yml --check"
+            }
+        }
     }
     
-    post { /* ... */ }
+    // --- The post block is now restored ---
+    post {
+        always {
+            sh "docker rmi ${AGENT_IMAGE_NAME} || true"
+        }
+    }
 }
