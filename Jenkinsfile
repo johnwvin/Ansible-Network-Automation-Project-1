@@ -50,15 +50,17 @@ pipeline {
                             LABEL maintainer="johnwvin.com"
                             LABEL description="Custom Ansible + Ansible-Lint image (Python 3.13)"
 
-                            # Use your APT proxy
-                            RUN echo "deb [trusted=yes] ${APT_MIRROR} trixie main" > /etc/apt/sources.list && \
+                            ARG APT_MIRROR
+                            RUN echo "deb [trusted=yes] \$APT_MIRROR trixie main" > /etc/apt/sources.list && \
                                 apt-get update && \
                                 apt-get install -y --no-install-recommends git ssh curl ca-certificates && \
                                 rm -rf /var/lib/apt/lists/*
 
-                            # Configure pip to use Nexus PyPI
-                            ENV PIP_INDEX_URL=${PIP_INDEX_URL}
-                            ENV PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
+                            # Pass pip mirror as build ARG
+                            ARG PIP_INDEX_URL
+                            ARG PIP_TRUSTED_HOST
+                            ENV PIP_INDEX_URL=\$PIP_INDEX_URL
+                            ENV PIP_TRUSTED_HOST=\$PIP_TRUSTED_HOST
 
                             RUN pip install --no-cache-dir --upgrade pip && \
                                 pip install --no-cache-dir ansible ansible-lint
@@ -68,7 +70,11 @@ pipeline {
                         '''
 
                         sh """
-                            docker build -t ${IMAGE_FULL_PUSH} .
+                            docker build \
+                                --build-arg APT_MIRROR=${APT_MIRROR} \
+                                --build-arg PIP_INDEX_URL=${PIP_INDEX_URL} \
+                                --build-arg PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
+                                -t ${IMAGE_FULL_PUSH} .
                             docker push ${IMAGE_FULL_PUSH}
                         """
                     }
