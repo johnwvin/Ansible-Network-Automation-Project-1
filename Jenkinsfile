@@ -5,7 +5,7 @@ pipeline {
         REGISTRY_URL      = "nexus.johnwvin.com"
         HOSTED_REPO       = "docker-hosted"
         GROUP_REPO        = "docker-group"
-        IMAGE_NAME        = "custom/ansible"
+        IMAGE_NAME        = "custom-ansible"
         IMAGE_TAG         = "3.13"
         IMAGE_FULL_PUSH   = "${REGISTRY_URL}/${HOSTED_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
         IMAGE_FULL_PULL   = "${REGISTRY_URL}/${GROUP_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
