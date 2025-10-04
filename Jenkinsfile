@@ -2,12 +2,14 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY_URL     = "nexus.johnwvin.com:14443"
+        REGISTRY_URL     = "nexus.johnwvin.com"
         IMAGE_NAME       = "custom/ansible"
         IMAGE_TAG        = "3.13"
         IMAGE_FULL       = "${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
         PIP_INDEX_URL    = "https://nexus.johnwvin.com/repository/PyPi/simple"
         PIP_TRUSTED_HOST = "nexus.johnwvin.com"
+        APT_MIRROR   = "https://nexus.johnwvin.com/repository/apt-deb/"
+
     }
 
     stages {
