@@ -8,7 +8,7 @@ pipeline {
         IMAGE_NAME        = "custom-ansible"
         IMAGE_TAG         = "3.13"
         IMAGE_FULL_PUSH   = "${REGISTRY_URL}/${HOSTED_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
-        IMAGE_FULL_PULL   = "${REGISTRY_URL}/${GROUP_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
+        IMAGE_FULL_PULL   = "${REGISTRY_URL}/${HOSTED_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
         PIP_INDEX_URL     = "https://nexus.johnwvin.com/repository/PyPi/simple"
         PIP_TRUSTED_HOST  = "nexus.johnwvin.com"
         APT_MIRROR        = "https://nexus.johnwvin.com/repository/apt-deb/"
