@@ -7,15 +7,15 @@ pipeline {
     }
 
     stages {
-        stage('Docker Login') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    sh '''
-                        echo "$NEXUS_PASS" | docker login nexus.johnwvin.com -u "$NEXUS_USER" --password-stdin
-                    '''
-                }
-            }
-        }
+#        stage('Docker Login') {
+#            steps {
+#                withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+#                    sh '''
+#                        echo "$NEXUS_PASS" | docker login nexus.johnwvin.com -u "$NEXUS_USER" --password-stdin
+#                    '''
+#                }
+#            }
+#        }
 
         stage('Pull Ansible Image') {
             steps {
