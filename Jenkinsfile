@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             // Use your Ansible image from your Nexus Docker registry repository URL, like the PyPI example
-            image 'https://nexus.johnwvin.com/repository/docker/ansible:latest'
+            image 'nexus.johnwvin.com/repository/docker/ansible:latest'
             args '-u root:root'
         }
     }
@@ -13,7 +13,18 @@ pipeline {
     }
 
     stages {
-        stage('Setup') {
+
+        stage('Setup Docker Auth') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'nexus-docker-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                sh '''
+                echo "$NEXUS_PASS" | docker login nexus.johnwvin.com -u "$NEXUS_USER" --password-stdin
+                '''
+                }
+            }
+        }
+
+        stage('Ansible Setup') {
             steps {
                 sh '''
                     echo "=== Installing dependencies via Nexus PyPI ==="
