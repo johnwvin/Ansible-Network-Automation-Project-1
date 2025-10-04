@@ -8,16 +8,6 @@ pipeline {
 
     stages {
 
-        stage('Pull Ansible Image') {
-            steps {
-                sh '''
-                    echo "Pulling Ansible image from Nexus..."
-                    docker pull nexus.johnwvin.com:14443/ansible/ansible
-
-                '''
-            }
-        }
-        
         stage('Docker Login') {
             steps {
                 echo "Logging into Nexus Docker repository..."
@@ -28,6 +18,16 @@ pipeline {
                         echo "$NEXUS_PASS" | docker login nexus.johnwvin.com:14443 -u "$NEXUS_USER" --password-stdin
                     '''
                 }
+            }
+        }
+        
+        stage('Pull Ansible Image') {
+            steps {
+                sh '''
+                    echo "Pulling Ansible image from Nexus..."
+                    docker pull nexus.johnwvin.com:14443/ansible/ansible
+
+                '''
             }
         }
 
