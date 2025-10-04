@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        # Nexus registry and image details
         REGISTRY_URL      = "nexus.johnwvin.com"
         HOSTED_REPO       = "docker-hosted"
         GROUP_REPO        = "docker-group"
@@ -10,12 +9,8 @@ pipeline {
         IMAGE_TAG         = "3.13"
         IMAGE_FULL_PUSH   = "${REGISTRY_URL}/${HOSTED_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
         IMAGE_FULL_PULL   = "${REGISTRY_URL}/${GROUP_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
-
-        # Python / pip configuration
         PIP_INDEX_URL     = "https://nexus.johnwvin.com/repository/PyPi/simple"
         PIP_TRUSTED_HOST  = "nexus.johnwvin.com"
-
-        # APT proxy
         APT_MIRROR        = "https://nexus.johnwvin.com/repository/apt-deb/"
     }
 
