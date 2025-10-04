@@ -1,118 +1,110 @@
 pipeline {
+    // This pipeline must run on an agent where the jenkins user can control Docker
     agent any
 
     environment {
-        LOCAL_DOCKER_REGISTRY = "localhost:5000"
-        LOCAL_PYPI_SERVER = "http://localhost:8080"
+        // --- Configuration ---
+        // Directory on the agent's filesystem for persistent caches
+        CACHE_DIR = "/home/jenkins-agent/agent/caches"
+        // Name for the private network this pipeline will create and use
+        PIPELINE_NETWORK = "ansible-project-net-${env.BUILD_ID}"
+        // Name for the final image we build to run our tests
         AGENT_IMAGE_NAME = "local-ansible-project-agent:${env.BUILD_ID}"
     }
 
     stages {
-        stage('Setup and Ensure Local Services') {
+        // --- STAGE 1: Setup Temporary Infrastructure ---
+        stage('Setup Services and Network') {
             steps {
                 script {
-                    sh '''
-                        #!/bin/bash
-                        SERVICE_DIR="/opt/jenkins-services"
-                        COMPOSE_FILE="${SERVICE_DIR}/docker-compose.yml"
-                        if [ ! -d "${SERVICE_DIR}" ]; then
-                          sudo mkdir -p "${SERVICE_DIR}/docker-registry-data"
-                          sudo mkdir "${SERVICE_DIR}/pypi-server-packages"
-                        fi
-                        if [ ! -f "${COMPOSE_FILE}" ]; then
-                          sudo tee "${COMPOSE_FILE}" > /dev/null <<EOF
-version: '3.7'
-services:
-  registry:
-    image: registry:2
-    restart: always
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./docker-registry-data:/var/lib/registry
-  pypi:
-    image: pypiserver/pypiserver:latest
-    restart: always
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./pypi-server-packages:/data/packages
-EOF
-                        fi
-                        cd ${SERVICE_DIR}
-                        RUNNING_SERVICES=$(sudo docker compose ps | grep "Up" | wc -l)
-                        if [ "$RUNNING_SERVICES" -lt 2 ]; then
-                          sudo docker compose up -d
-                          sleep 5
-                        fi
-                    '''
+                    // Create cache directories on the host if they don't exist
+                    sh "mkdir -p ${CACHE_DIR}/docker-registry ${CACHE_DIR}/pypi-packages"
+                    
+                    // Create a private network for our services to communicate on
+                    sh "docker network create ${PIPELINE_NETWORK}"
+
+                    // Start the Docker Registry container on our private network
+                    sh """
+                        docker run -d --name registry-server --network ${PIPELINE_NETWORK} \
+                        -v ${CACHE_DIR}/docker-registry:/var/lib/registry \
+                        registry:2
+                    """
+
+                    // Start the PyPI Server container on our private network
+                    sh """
+                        docker run -d --name pypi-server --network ${PIPELINE_NETWORK} \
+                        -v ${CACHE_DIR}/pypi-packages:/data/packages \
+                        pypiserver/pypiserver:latest
+                    """
+                    
+                    // Give the services a moment to initialize
+                    echo "Waiting for services to start..."
+                    sleep 5
                 }
             }
         }
 
-        stage('Sync Dependencies to Local Caches') {
+        // --- STAGE 2: Sync Dependencies to Caches ---
+        stage('Sync Dependencies') {
             steps {
                 script {
-                    echo "--- Syncing Docker Images ---"
-                    def dockerImages = readFile('ci/docker_images.txt').trim().split('\n')
-                    dockerImages.each { imageName ->
-                        sh "docker pull ${imageName}"
-                        sh "docker tag ${imageName} ${LOCAL_DOCKER_REGISTRY}/${imageName}"
-                        sh "docker push ${LOCAL_DOCKER_REGISTRY}/${imageName}"
-                    }
+                    // This temporary container also needs to be on our private network to see the services
+                    docker.image('python:3.13-slim').inside("--network ${PIPELINE_NETWORK} -u root") {
+                        echo "--- Syncing Docker Images ---"
+                        def dockerImages = readFile('ci/docker_images.txt').trim().split('\n')
+                        dockerImages.each { imageName ->
+                            sh "docker pull ${imageName}"
+                            sh "docker tag ${imageName} registry-server:5000/${imageName}"
+                            sh "docker push registry-server:5000/${imageName}"
+                        }
 
-                    echo "\n--- Syncing Python Packages ---"
-                    docker.image('python:3.13-slim').inside("-u root") {
+                        echo "\n--- Syncing Python Packages ---"
                         sh "pip install -r ci/python_packages.txt"
                         sh "pip download -r ci/python_packages.txt -d ./packages"
-                        sh '''
-                            #!/bin/bash
-                            for pkg in ./packages/*.whl; do
-                              PKG_NAME=$(basename ${pkg} | cut -d- -f1)
-                              echo "Checking for package: ${PKG_NAME} on local server..."
-                              if pip search --index ${LOCAL_PYPI_SERVER}/simple ${PKG_NAME} | grep -i ${PKG_NAME}; then
-                                echo "Package ${PKG_NAME} already exists. Skipping."
-                              else
-                                echo "Package ${PKG_NAME} not found. Uploading ${pkg}..."
-                                twine upload --repository-url ${LOCAL_PYPI_SERVER}/ ${pkg}
-                              fi
-                            done
-                        '''
+                        sh "twine upload --repository-url http://pypi-server:8080/ --skip-existing ./packages/*"
                     }
                 }
             }
         }
 
-        // --- The following stages are now restored ---
-        stage('Build Local Ansible Agent') {
+        // --- STAGE 3: Build Final Agent Image ---
+        stage('Build Ansible Agent') {
             steps {
                 script {
-                    docker.build(AGENT_IMAGE_NAME, "./ci")
+                    // Build our final agent using the caches populated in the previous stage
+                    docker.build(AGENT_IMAGE_NAME, "--network ${PIPELINE_NETWORK} ./ci")
                 }
             }
         }
 
-        stage('Lint Ansible Code') {
-            agent { docker { image AGENT_IMAGE_NAME } }
+        // --- STAGE 4 & 5: Run Checks ---
+        stage('Lint and Check Playbooks') {
+            agent {
+                // Use the image we just built to run our tests
+                docker { image AGENT_IMAGE_NAME }
+            }
             steps {
                 checkout scm
                 sh "ansible-lint ."
-            }
-        }
-
-        stage('Check Ansible Playbooks') {
-            agent { docker { image AGENT_IMAGE_NAME } }
-            steps {
-                checkout scm
                 sh "ansible-playbook -i inventory/staging.ini playbooks/main.yml --check"
             }
         }
     }
-    
-    // --- The post block is now restored ---
+
+    // --- FINAL STEP: Automatic Cleanup ---
     post {
         always {
-            sh "docker rmi ${AGENT_IMAGE_NAME} || true"
+            script {
+                echo "--- Cleaning up pipeline infrastructure ---"
+                // Stop and remove the service containers, ignoring errors if they're already gone
+                sh "docker rm -f registry-server pypi-server || true"
+                
+                // Remove the locally built agent image
+                sh "docker rmi ${AGENT_IMAGE_NAME} || true"
+                
+                // Remove the private network
+                sh "docker network rm ${PIPELINE_NETWORK} || true"
+            }
         }
     }
 }
