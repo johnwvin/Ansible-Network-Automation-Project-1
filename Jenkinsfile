@@ -10,6 +10,17 @@ pipeline {
     }
 
     stages {
+        // --- NEW STAGE: Force cleanup before we start ---
+        stage('Pre-flight Cleanup') {
+            steps {
+                echo "Forcefully removing any leftover containers from previous runs..."
+                // The '|| true' ensures these commands don't fail the pipeline if the containers don't exist.
+                sh "docker rm -f registry-server || true"
+                sh "docker rm -f pypi-server || true"
+            }
+        }
+
+        // --- The rest of the pipeline remains the same ---
         stage('Setup Services and Network') {
             steps {
                 script {
