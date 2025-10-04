@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         REGISTRY_URL      = "nexus.johnwvin.com"
-        HOSTED_REPO       = "/repository/docker-hosted/"
+        HOSTED_REPO       = "/repository/docker-hosted"
         GROUP_REPO        = "docker-group"
         IMAGE_NAME        = "custom-ansible"
         IMAGE_TAG         = "3.13"
