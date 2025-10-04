@@ -1,0 +1,3 @@
+ansible-lint==25.9.1
+ansible-core==2.19.2
+twine

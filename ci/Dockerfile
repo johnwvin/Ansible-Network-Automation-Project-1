@@ -1,10 +1,10 @@
-# ci/Dockerfile
+# /ci/Dockerfile in your Ansible project repository
 
-# Start from a lightweight, official Python image
-FROM python:3.13-slim
+# Step 1: Pull the base image FROM your local registry on the agent
+FROM localhost:5000/python:3.13-slim
 
-# Install ansible-lint. Pinning the version ensures your builds are
-# reproducible and won't break if a new version is released.
-RUN pip install ansible-lint==25.9.1
-
-
+# Step 2: Tell pip to INSTALL from your local PyPI mirror on the agent
+# The --trusted-host flag is needed for the non-HTTPS connection.
+RUN pip install --trusted-host localhost \
+                --index-url http://localhost:8080/simple/ \
+                ansible-lint==25.9.1 ansible-core==2.19.2

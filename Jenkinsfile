@@ -1,46 +1,83 @@
 pipeline {
-    // Start on any available agent that has Docker installed.
+    // The main pipeline starts on any agent with Docker installed
     agent any
 
+    environment {
+        // Define addresses for the services running on the agent
+        LOCAL_DOCKER_REGISTRY = "localhost:5000"
+        LOCAL_PYPI_SERVER = "http://localhost:8080"
+        
+        // Define a unique name for the agent image we build in this pipeline
+        AGENT_IMAGE_NAME = "local-ansible-project-agent:${env.BUILD_ID}"
+    }
+
     stages {
-        // --- STAGE 1: Build the Environment ---
-        stage('Build Agent Image') {
+        // --- STAGE 1: Verify and Populate Local Caches ---
+        stage('Sync Dependencies to Local Caches') {
             steps {
                 script {
-                    // This step reads your ./ci/Dockerfile and builds an image.
-                    // We will name it 'ansible-lint-agent-local' just for this pipeline run.
-                    echo "Building the agent image from the Dockerfile..."
-                    def customImage = docker.build("ansible-lint-agent-local", "./ci")
+                    echo "--- Syncing Docker Images ---"
+                    def dockerImages = readFile('ci/docker_images.txt').trim().split('\n')
+                    dockerImages.each { imageName ->
+                        echo "Syncing ${imageName} to local registry..."
+                        sh "docker pull ${imageName}"
+                        sh "docker tag ${imageName} ${LOCAL_DOCKER_REGISTRY}/${imageName}"
+                        sh "docker push ${LOCAL_DOCKER_REGISTRY}/${imageName}"
+                    }
+
+                    echo "\n--- Syncing Python Packages ---"
+                    // Use a temporary container to download/upload Python packages
+                    docker.image('python:3.13-slim').inside {
+                        sh "pip install -r ci/python_packages.txt"
+                        sh "pip download -r ci/python_packages.txt -d ./packages"
+                        // --skip-existing handles the "if not found" logic automatically
+                        sh "twine upload --repository-url ${LOCAL_PYPI_SERVER}/ --skip-existing ./packages/*"
+                    }
                 }
             }
         }
 
-        // --- STAGE 2: Use the Environment We Just Built ---
-        stage('Run Linting in Custom Agent') {
-            // This is the key: this stage runs on a different, dynamic agent.
-            // It uses the image we just built in the previous stage.
+        // --- STAGE 2: Build the Final Agent Image Using Local Caches ---
+        stage('Build Local Ansible Agent') {
+            steps {
+                echo "Building the final agent image using local caches..."
+                // This builds the Dockerfile you provided
+                docker.build(AGENT_IMAGE_NAME, "./ci")
+            }
+        }
+
+        // --- STAGE 3: Run Static Analysis (Lint) ---
+        stage('Lint Ansible Code') {
             agent {
-                docker { image "ansible-lint-agent-local" }
+                // Use the image we just built in the previous stage
+                docker { image AGENT_IMAGE_NAME }
             }
             steps {
-                // We must check out the code again inside this new container
-                // so the linter has something to scan.
                 checkout scm
-                
-                echo "Running ansible-lint..."
-                sh 'ansible-lint .'
+                sh "ansible-lint ."
+            }
+        }
+
+        // --- STAGE 4: Run Ansible Configuration Check ---
+        stage('Check Ansible Playbooks') {
+            agent {
+                // Use the same fresh image
+                docker { image AGENT_IMAGE_NAME }
+            }
+            steps {
+                checkout scm
+                // Run ansible-playbook in check mode to verify syntax and logic
+                // Update the inventory and playbook paths as needed for your project
+                sh "ansible-playbook -i inventory/staging.ini playbooks/main.yml --check"
             }
         }
     }
     
-    // This optional block will clean up the temporary Docker image
-    // after the pipeline is finished, keeping your agent machine clean.
     post {
+        // This block runs at the end to clean up the temporary image
         always {
-            script {
-                echo "Cleaning up temporary Docker image..."
-                sh "docker rmi ansible-lint-agent-local || true"
-            }
+            echo "Cleaning up local Docker image: ${AGENT_IMAGE_NAME}"
+            sh "docker rmi ${AGENT_IMAGE_NAME} || true"
         }
     }
 }
