@@ -1,0 +1,13 @@
+[legacy_routers]
+10.0.0.100
+
+[legacy_routers:vars]
+# Standard connection variables
+ansible_user=john
+ansible_password=password
+ansible_network_os=cisco.ios.ios
+ansible_connection=network_cli
+
+# ⚙️ This is the crucial part
+# It combines both workarounds your router needs.
+ansible_ssh_common_args='-o KexAlgorithms=+diffie-hellman-group14-sha1 -o HostKeyAlgorithms=+ssh-rsa'
