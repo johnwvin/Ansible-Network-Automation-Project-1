@@ -12,6 +12,8 @@ pipeline {
         PIP_INDEX_URL     = "https://nexus.johnwvin.com/repository/PyPi/simple"
         PIP_TRUSTED_HOST  = "nexus.johnwvin.com"
         APT_MIRROR        = "https://nexus.johnwvin.com/repository/apt-deb/"
+        GITEA_TOKEN       = credentials('Gitea Credentials')  // 👈 here
+
     }
 
     stages {
