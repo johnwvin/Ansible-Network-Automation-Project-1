@@ -17,6 +17,19 @@ pipeline {
                 '''
             }
         }
+        
+        stage('Docker Login') {
+            steps {
+                echo "Logging into Nexus Docker repository..."
+                withCredentials([usernamePassword(credentialsId: 'nexus-creds', 
+                                                  usernameVariable: 'NEXUS_USER', 
+                                                  passwordVariable: 'NEXUS_PASS')]) {
+                    sh '''
+                        echo "$NEXUS_PASS" | docker login nexus.johnwvin.com:14443 -u "$NEXUS_USER" --password-stdin
+                    '''
+                }
+            }
+        }
 
         stage('Run Lint in Container') {
             steps {
