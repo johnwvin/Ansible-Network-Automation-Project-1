@@ -1,8 +1,8 @@
 pipeline {
     agent {
         docker {
-            // Use your Ansible image from your Nexus Docker registry
-            image 'nexus.johnwvin.com:8083/ansible:latest'
+            // Use your Ansible image from your Nexus Docker registry repository URL, like the PyPI example
+            image 'nexus.johnwvin.com/repository/docker/ansible:latest'
             args '-u root:root'
         }
     }
