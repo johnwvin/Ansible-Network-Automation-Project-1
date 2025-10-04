@@ -12,7 +12,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Pulling Ansible image from Nexus..."
-                    docker pull nexus.johnwvin.com:1480/ansible/ansible
+                    docker pull nexus.johnwvin.com:14443/ansible/ansible
 
                 '''
             }
@@ -21,7 +21,7 @@ pipeline {
         stage('Run Lint in Container') {
             steps {
                 script {
-                    docker.image('nexus.johnwvin.com:1480/ansible/ansible').inside('-u root:root') {
+                    docker.image('nexus.johnwvin.com:14443/ansible/ansible').inside('-u root:root') {
                         sh '''
                             echo "=== Installing dependencies via Nexus PyPI ==="
                             pip install --no-cache-dir --upgrade pip
