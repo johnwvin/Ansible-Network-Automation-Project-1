@@ -78,7 +78,7 @@ EOF
                     }
 
                     echo "\n--- Syncing Python Packages ---"
-                    docker.image('python:3.13-slim').inside {
+                    docker.image('python:3.13-slim').inside("-u root") {
                         sh "pip install -r ci/python_packages.txt"
                         sh "pip download -r ci/python_packages.txt -d ./packages"
                         sh "twine upload --repository-url ${LOCAL_PYPI_SERVER}/ --skip-existing ./packages/*"
