@@ -89,27 +89,28 @@ pipeline {
                         sh '''
                             echo "=== Using Nexus PyPI mirror: $PIP_INDEX_URL ==="
                             echo "=== Running ansible-lint ==="
-                            ansible-lint -v playbooks/ --format junit > ansible-lint-report.xml || true
+                            ansible-lint -v playbooks/ --format json > ansible-lint-report.json || true
                         '''
                     }
                     // Archive so anyone can download the XML
-                    archiveArtifacts artifacts: 'ansible-lint-report.xml', allowEmptyArchive: true
-                    // Jenkins parses the report to display results
-                    junit 'ansible-lint-report.xml'
+                    archiveArtifacts artifacts: 'ansible-lint-report.json', allowEmptyArchive: true
                 }
             }
         }
         stage('Report Lint to Gitea') {
             steps {
                 script {
-                    // parse junit XML to count failures
-                    def report = readFile 'ansible-lint-report.xml'
-                    def failures = report.readLines().findAll { it.contains('failure') }.size()
+                    // Read the JSON report
+                    def reportText = readFile 'ansible-lint-report.json'
+                    def report = new groovy.json.JsonSlurper().parseText(reportText)
+                    
+                    // Count total failures
+                    def failures = report.size()  // each entry is a violation
                     
                     // Compose a comment
-                    def comment = "Ansible Lint completed: ${failures} failure(s). See Jenkins build artifacts for full report."
+                    def comment = "Ansible Lint completed: ${failures} violation(s). See Jenkins build artifacts for full report."
                     
-                    // Use HTTP POST to Gitea API
+                    // Post comment to Gitea
                     sh """
                     curl -s -X POST \
                         -H "Content-Type: application/json" \
