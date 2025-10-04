@@ -3,19 +3,21 @@ pipeline {
 
     environment {
         REGISTRY_URL     = "nexus.johnwvin.com"
-        IMAGE_NAME       = "docker-hosted/ansible"
+        DOCKER_REPO      = "docker-group"
+        IMAGE_NAME       = "custom/ansible"
         IMAGE_TAG        = "3.13"
-        IMAGE_FULL       = "${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
+        IMAGE_FULL       = "${REGISTRY_URL}/${DOCKER_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
+
         PIP_INDEX_URL    = "https://nexus.johnwvin.com/repository/PyPi/simple"
         PIP_TRUSTED_HOST = "nexus.johnwvin.com"
-        APT_MIRROR   = "https://nexus.johnwvin.com/repository/apt-deb/"
-
+        APT_MIRROR       = "https://nexus.johnwvin.com/repository/apt-deb/"
     }
 
     stages {
+
         stage('Docker Login') {
             steps {
-                echo "🔐 Logging into Nexus Docker repository..."
+                echo "🔐 Logging into Nexus Docker repository group..."
                 withCredentials([usernamePassword(
                     credentialsId: 'nexus-creds-1',
                     usernameVariable: 'NEXUS_USER',
@@ -38,7 +40,7 @@ pipeline {
                     ).trim()
 
                     if (exists == "true") {
-                        echo "✅ Found cached image in Nexus, skipping build."
+                        echo "✅ Found cached image in Nexus docker-group — skipping build."
                     } else {
                         echo "⚙️ Image not found — building and pushing custom Ansible image..."
 
@@ -52,7 +54,6 @@ pipeline {
                                 apt-get install -y --no-install-recommends git ssh curl ca-certificates && \
                                 rm -rf /var/lib/apt/lists/*
 
-                            # Preconfigure pip to use your Nexus PyPI mirror
                             ENV PIP_INDEX_URL=https://nexus.johnwvin.com/repository/PyPi/simple
                             ENV PIP_TRUSTED_HOST=nexus.johnwvin.com
 
@@ -61,7 +62,7 @@ pipeline {
 
                             WORKDIR /workspace
                             CMD ["bash"]
-                            '''
+                        '''
 
                         sh """
                             docker build -t ${IMAGE_FULL} .
@@ -72,13 +73,13 @@ pipeline {
             }
         }
 
-        stage('Run Lint in Container') {
+        stage('Run Ansible Lint') {
             steps {
                 script {
+                    echo "🧪 Running ansible-lint using ${IMAGE_FULL}..."
                     docker.image("${IMAGE_FULL}").inside('-u root:root') {
                         sh '''
                             echo "=== Using Nexus PyPI mirror: $PIP_INDEX_URL ==="
-                            echo "=== Running ansible-lint ==="
                             ansible-lint -v playbooks/
                         '''
                     }
@@ -89,7 +90,7 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline completed (success or failure)."
+            echo "🏁 Pipeline completed (success or failure)."
         }
         success {
             echo "✅ Ansible lint check passed!"
