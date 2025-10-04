@@ -1,11 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            // Use your Ansible image from your Nexus Docker registry repository URL, like the PyPI example
-            image 'nexus.johnwvin.com/repository/docker/ansible:latest'
-            args '-u root:root'
-        }
-    }
+    agent any
 
     environment {
         PIP_INDEX_URL = 'https://nexus.johnwvin.com/repository/PyPi/'
@@ -13,33 +7,38 @@ pipeline {
     }
 
     stages {
-
-        stage('Setup Docker Auth') {
+        stage('Docker Login') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds-1', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                sh '''
-                echo "$NEXUS_PASS" | docker login nexus.johnwvin.com -u "$NEXUS_USER" --password-stdin
-                '''
+                    sh '''
+                        echo "$NEXUS_PASS" | docker login nexus.johnwvin.com -u "$NEXUS_USER" --password-stdin
+                    '''
                 }
             }
         }
 
-        stage('Ansible Setup') {
+        stage('Pull Ansible Image') {
             steps {
                 sh '''
-                    echo "=== Installing dependencies via Nexus PyPI ==="
-                    pip install --no-cache-dir --upgrade pip
-                    pip install --index-url $PIP_INDEX_URL ansible ansible-lint
+                    echo "Pulling Ansible image from Nexus..."
+                    docker pull nexus.johnwvin.com/repository/docker/ansible:latest
                 '''
             }
         }
 
-        stage('Lint Playbooks') {
+        stage('Run Lint in Container') {
             steps {
-                sh '''
-                    echo "=== Running ansible-lint ==="
-                    ansible-lint -v playbooks/
-                '''
+                script {
+                    docker.image('nexus.johnwvin.com/repository/docker/ansible:latest').inside('-u root:root') {
+                        sh '''
+                            echo "=== Installing dependencies via Nexus PyPI ==="
+                            pip install --no-cache-dir --upgrade pip
+                            pip install --index-url $PIP_INDEX_URL ansible ansible-lint
+                            echo "=== Running ansible-lint ==="
+                            ansible-lint -v playbooks/
+                        '''
+                    }
+                }
             }
         }
     }
