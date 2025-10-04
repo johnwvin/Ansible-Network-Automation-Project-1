@@ -120,15 +120,16 @@ pipeline {
                 }
             }
         }
-    post {
-        always {
-            echo "Pipeline completed (success or failure)."
-        }
-        success {
-            echo "✅ Ansible lint check passed!"
-        }
-        failure {
-            echo "❌ Ansible lint check failed!"
+        post {
+            always {
+                echo "Pipeline completed (success or failure)."
+            }
+            success {
+                echo "✅ Ansible lint check passed!"
+            }
+            failure {
+                echo "❌ Ansible lint check failed!"
+            }
         }
     }
 }
