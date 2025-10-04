@@ -89,14 +89,37 @@ pipeline {
                         sh '''
                             echo "=== Using Nexus PyPI mirror: $PIP_INDEX_URL ==="
                             echo "=== Running ansible-lint ==="
-                            ansible-lint -v playbooks/
+                            ansible-lint -v playbooks/ --format junit > ansible-lint-report.xml || true
                         '''
                     }
+                    // Archive so anyone can download the XML
+                    archiveArtifacts artifacts: 'ansible-lint-report.xml', allowEmptyArchive: true
+                    // Jenkins parses the report to display results
+                    junit 'ansible-lint-report.xml'
                 }
             }
         }
-    }
-
+        stage('Report Lint to Gitea') {
+            steps {
+                script {
+                    // parse junit XML to count failures
+                    def report = readFile 'ansible-lint-report.xml'
+                    def failures = report.readLines().findAll { it.contains('failure') }.size()
+                    
+                    // Compose a comment
+                    def comment = "Ansible Lint completed: ${failures} failure(s). See Jenkins build artifacts for full report."
+                    
+                    // Use HTTP POST to Gitea API
+                    sh """
+                    curl -s -X POST \
+                        -H "Content-Type: application/json" \
+                        -H "Authorization: token ${GITEA_TOKEN}" \
+                        -d '{ "body": "${comment}" }' \
+                        https://gitea.johnwvin.com/api/v1/repos/ORG/REPO/issues/${CHANGE_ID}/comments
+                    """
+                }
+            }
+        }
     post {
         always {
             echo "Pipeline completed (success or failure)."
