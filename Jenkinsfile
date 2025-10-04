@@ -40,9 +40,9 @@ services:
 EOF
                         fi
                         cd ${SERVICE_DIR}
-                        RUNNING_SERVICES=$(sudo docker-compose ps | grep "Up" | wc -l)
+                        RUNNING_SERVICES=$(sudo docker compose ps | grep "Up" | wc -l)
                         if [ "$RUNNING_SERVICES" -lt 2 ]; then
-                          sudo docker-compose up -d
+                          sudo docker compose up -d
                           sleep 5
                         fi
                     '''
